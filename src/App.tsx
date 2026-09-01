@@ -4,6 +4,7 @@ import { Inspector } from './components/Inspector';
 import { TerminalLog } from './components/TerminalLog';
 import { FilterBar } from './components/FilterBar';
 import { StatsHUD } from './components/StatsHUD';
+import { Analytics } from '@vercel/analytics/react';
 
 export function App() {
   return (
@@ -29,6 +30,9 @@ export function App() {
         {/* Right Inspector Sidebar */}
         <Inspector />
       </div>
+
+      {/* Vercel Web Analytics */}
+      <Analytics />
     </div>
   );
 }
