@@ -8,9 +8,9 @@ import { LabelModal } from './LabelModal';
 import { Plus, Minus, Maximize2, RotateCcw, Eye, Radar, Play } from 'lucide-react';
 
 const PRESETS = [
-  { label: 'Exchange Hot Wallet (MEXC)', address: 'kaspa:qqkqkzjvr7zwxxmjxjkmxxdwju9kjs6e9u82uh59z07vgaks6gg62v8707g73' },
-  { label: 'Mining Pool Distributor (HumPool)', address: 'kaspa:qqje6ps46n6pvjstupfxgrg6v3pegd22q84jachnfrnz2vh5vznqw8redgln6' },
-  { label: 'Active Whale / Trader', address: 'kaspa:qp9rv9jvx2kyf6wu4lupuruunq5zsuszyxs0dr3l89ej7wsgs48jqkewy6xtl' },
+  { label: 'Top Whale Wallet (#1 Rank)', address: 'kaspa:qpz2vgvlxhmyhmt22h538pjzmvvd52nuut80y5zulgpvyerlskvvwm7n4uk5a' },
+  { label: 'MEXC Exchange Vault (#2 Rank)', address: 'kaspa:qpzpfwcsqsxhxwup26r55fd0ghqlhyugz8cp6y3wxuddc02vcxtjg75pspnwz' },
+  { label: 'DAG-Recon Creator Wallet', address: 'kaspa:qypgw7xw60yvxv5pcjncdv4f30wanju0g64hw3204wreayajt3025qgde344ycq' },
 ];
 
 export const CanvasGraph: React.FC = () => {

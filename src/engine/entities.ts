@@ -6,6 +6,22 @@ export interface KnownEntity {
 
 // Known public Kaspa addresses & patterns
 export const KNOWN_ENTITIES: Record<string, KnownEntity> = {
+  // Top Ranked Addresses
+  'kaspa:qpz2vgvlxhmyhmt22h538pjzmvvd52nuut80y5zulgpvyerlskvvwm7n4uk5a': {
+    name: 'Kaspa Top Whale (#1)',
+    type: 'dev',
+    color: '#00f3ff',
+  },
+  'kaspa:qpzpfwcsqsxhxwup26r55fd0ghqlhyugz8cp6y3wxuddc02vcxtjg75pspnwz': {
+    name: 'MEXC Exchange Vault (#2)',
+    type: 'exchange',
+    color: '#38bdf8',
+  },
+  'kaspa:qypgw7xw60yvxv5pcjncdv4f30wanju0g64hw3204wreayajt3025qgde344ycq': {
+    name: 'DAG-Recon Creator',
+    type: 'dev',
+    color: '#00f3ff',
+  },
   // Kaspa Foundation / Development Funds
   'kaspa:precqv0fu6cw3vg4ech8xsrtqq8b0pdusdnc9afmpnv655tlmp0jw2kvlqmc5': {
     name: 'Kaspa Dev Fund (Main)',
