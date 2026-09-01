@@ -220,6 +220,34 @@ export const Inspector: React.FC = () => {
                   </span>
                   <span className="text-rose-400 font-semibold">{formatKas(totalOutSompis)}</span>
                 </div>
+
+                {/* Flow Ratio Progress Bar */}
+                {totalInSompis + totalOutSompis > 0 && (
+                  <div className="space-y-1 pt-1.5 border-t border-gray-800/60">
+                    <div className="flex justify-between text-[9px] font-bold">
+                      <span className="text-emerald-400">
+                        {((totalInSompis / (totalInSompis + totalOutSompis)) * 100).toFixed(0)}% IN
+                      </span>
+                      <span className="text-rose-400">
+                        {((totalOutSompis / (totalInSompis + totalOutSompis)) * 100).toFixed(0)}% OUT
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden flex">
+                      <div
+                        style={{
+                          width: `${(totalInSompis / (totalInSompis + totalOutSompis)) * 100}%`,
+                        }}
+                        className="h-full bg-emerald-500 shadow-[0_0_6px_rgba(0,255,102,0.4)]"
+                      />
+                      <div
+                        style={{
+                          width: `${(totalOutSompis / (totalInSompis + totalOutSompis)) * 100}%`,
+                        }}
+                        className="h-full bg-rose-500 shadow-[0_0_6px_rgba(255,0,85,0.4)]"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -230,6 +258,55 @@ export const Inspector: React.FC = () => {
                 <Radar className="w-4 h-4 text-cyan-400" />
                 <span>RE-CENTER & EXPAND TRACE</span>
               </button>
+
+              {/* Counterparty Activity Breakdown */}
+              {(incomingEdges.length > 0 || outgoingEdges.length > 0) && (
+                <div className="p-3 rounded bg-[#07090e] border border-[#1b2333] space-y-2.5">
+                  <span className="text-[10px] text-gray-500 tracking-wider">COUNTERPARTY FLOWS</span>
+
+                  {incomingEdges.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-emerald-400 font-bold">
+                        <span>📥 RECEIVED FROM ({incomingEdges.length})</span>
+                      </div>
+                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        {incomingEdges.slice(0, 4).map((e) => (
+                          <div
+                            key={e.id}
+                            onClick={() => selectNode(e.source)}
+                            title="Click to jump to sender wallet"
+                            className="p-1.5 rounded bg-black/40 hover:bg-emerald-950/30 border border-gray-800 hover:border-emerald-500/40 flex items-center justify-between cursor-pointer text-[10px] transition"
+                          >
+                            <span className="text-gray-300">{shortenAddress(e.source, 6, 4)}</span>
+                            <span className="text-emerald-400 font-bold">+{formatKas(e.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {outgoingEdges.length > 0 && (
+                    <div className="space-y-1 pt-1.5 border-t border-gray-800/60">
+                      <div className="flex justify-between text-[10px] text-cyan-400 font-bold">
+                        <span>📤 TRANSFERRED TO ({outgoingEdges.length})</span>
+                      </div>
+                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        {outgoingEdges.slice(0, 4).map((e) => (
+                          <div
+                            key={e.id}
+                            onClick={() => selectNode(e.target)}
+                            title="Click to jump to recipient wallet"
+                            className="p-1.5 rounded bg-black/40 hover:bg-cyan-950/30 border border-gray-800 hover:border-cyan-500/40 flex items-center justify-between cursor-pointer text-[10px] transition"
+                          >
+                            <span className="text-gray-300">{shortenAddress(e.target, 6, 4)}</span>
+                            <span className="text-rose-400 font-bold">-{formatKas(e.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Forensic Alerts */}
               {nodeAlerts.length > 0 && (

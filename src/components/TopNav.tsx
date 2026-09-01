@@ -11,8 +11,10 @@ import {
   Sparkles,
   Heart,
   HelpCircle,
+  Keyboard,
+  X,
 } from 'lucide-react';
-import { DonationModal, GuideModal } from './InfoModals';
+import { DonationModal, GuideModal, ShortcutsModal } from './InfoModals';
 
 const PRESET_ADDRESSES = [
   { label: 'Top Whale Wallet (#1 Rank)', address: 'kaspa:qpz2vgvlxhmyhmt22h538pjzmvvd52nuut80y5zulgpvyerlskvvwm7n4uk5a' },
@@ -35,6 +37,7 @@ export const TopNav: React.FC = () => {
 
   const [isDonationOpen, setIsDonationOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   const handlePresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value) {
@@ -70,7 +73,7 @@ export const TopNav: React.FC = () => {
         </div>
 
         {/* Search Bar & Controls */}
-        <div className="flex items-center space-x-2 flex-1 max-w-2xl mx-4">
+        <div className="flex items-center space-x-2 flex-1 max-w-4xl mx-3">
           <div className="relative flex-1">
             <input
               type="text"
@@ -78,9 +81,18 @@ export const TopNav: React.FC = () => {
               onChange={(e) => setRootInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Enter Kaspa address (kaspa:...) or Transaction ID..."
-              className="w-full h-9 bg-[#0d111a] border border-[#1b2333] focus:border-cyan-500/80 focus:shadow-[0_0_10px_rgba(0,243,255,0.2)] rounded px-3 pl-9 text-xs text-slate-100 font-mono placeholder:text-gray-600 outline-none transition"
+              className="w-full h-9 bg-[#0d111a] border border-[#1b2333] focus:border-cyan-500/80 focus:shadow-[0_0_10px_rgba(0,243,255,0.2)] rounded px-3 pl-9 pr-8 text-xs text-slate-100 font-mono placeholder:text-gray-600 outline-none transition"
             />
             <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-2.5" />
+            {rootInput.length > 0 && (
+              <button
+                onClick={() => setRootInput('')}
+                title="Clear address (Hapus input)"
+                className="absolute right-2.5 top-2 p-0.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-cyan-300 transition flex items-center justify-center"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Preset Selector */}
@@ -168,11 +180,21 @@ export const TopNav: React.FC = () => {
 
         {/* Right Info & Actions */}
         <div className="flex items-center space-x-2">
+          {/* Shortcuts Button */}
+          <button
+            onClick={() => setIsShortcutsOpen(true)}
+            className="h-8 px-2.5 rounded bg-[#0d111a] hover:bg-[#1b2333] border border-gray-700 text-gray-300 flex items-center space-x-1.5 text-[11px] font-mono transition"
+            title="Keyboard & Mouse Shortcuts"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
+            <span>HOTKEYS</span>
+          </button>
+
           {/* Guide Button */}
           <button
             onClick={() => setIsGuideOpen(true)}
             className="h-8 px-2.5 rounded bg-[#0d111a] hover:bg-[#1b2333] border border-cyan-500/30 text-cyan-300 flex items-center space-x-1.5 text-[11px] font-mono transition"
-            title="Quick Guide"
+            title="Knowledge Base & Guide"
           >
             <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
             <span>GUIDE</span>
@@ -182,7 +204,7 @@ export const TopNav: React.FC = () => {
           <button
             onClick={() => setIsDonationOpen(true)}
             className="h-8 px-2.5 rounded bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/50 text-rose-300 flex items-center space-x-1.5 text-[11px] font-mono transition shadow-[0_0_10px_rgba(255,0,85,0.15)]"
-            title="Donasi KAS"
+            title="Support Development"
           >
             <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-500" />
             <span>DONATE</span>
@@ -200,6 +222,7 @@ export const TopNav: React.FC = () => {
       {/* Modals */}
       <DonationModal isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} />
       <GuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+      <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
     </>
   );
 };

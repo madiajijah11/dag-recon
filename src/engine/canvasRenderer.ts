@@ -18,6 +18,7 @@ export interface RenderOptions {
   searchFilter: string;
   particleOffset: number;
   showMinimap?: boolean;
+  isScanning?: boolean;
 }
 
 interface BundledEdge {
@@ -50,6 +51,7 @@ export function drawCyberpunkGraph(
     searchFilter,
     particleOffset,
     showMinimap = true,
+    isScanning = false,
   } = options;
 
   // Clear background
@@ -63,12 +65,19 @@ export function drawCyberpunkGraph(
   ctx.translate(viewport.x, viewport.y);
   ctx.scale(viewport.scale, viewport.scale);
 
+  // 2. Draw Radar Sweep when Scanning
+  if (isScanning) {
+    drawScanningSweep(ctx, nodes, particleOffset);
+  }
+
+  const activeFocusId = hoveredNodeId || selectedNodeId;
+
   const nodeMap = new Map<string, GraphNode>();
   for (const n of nodes) {
     if (!n.hidden) nodeMap.set(n.id, n);
   }
 
-  // 2. Bundle parallel edges
+  // 3. Bundle parallel edges
   const bundleMap = new Map<string, BundledEdge>();
 
   for (const edge of edges) {
@@ -97,26 +106,59 @@ export function drawCyberpunkGraph(
     bundle.rawEdges.push(edge);
   }
 
-  // 3. Draw Edges
+  const badgesToDraw: Array<{
+    x: number;
+    y: number;
+    text: string;
+    color: string;
+    isIncoming: boolean;
+  }> = [];
+
+  // Find set of connected nodes to the active focused node
+  const connectedNodeIds = new Set<string>();
+  if (activeFocusId) {
+    connectedNodeIds.add(activeFocusId);
+    for (const b of bundleMap.values()) {
+      if (b.source === activeFocusId) connectedNodeIds.add(b.target);
+      if (b.target === activeFocusId) connectedNodeIds.add(b.source);
+    }
+  }
+
+  // 4. Draw Edges & Particles (with selective focus dimming)
   for (const bundle of bundleMap.values()) {
     const src = nodeMap.get(bundle.source);
     const tgt = nodeMap.get(bundle.target);
     if (!src || !tgt) continue;
 
+    const isDirectlyConnected =
+      !activeFocusId || bundle.source === activeFocusId || bundle.target === activeFocusId;
+    const isIncomingToFocus = activeFocusId === bundle.target;
+    const isOutgoingFromFocus = activeFocusId === bundle.source;
+
     const isSelected =
       bundle.id === selectedEdgeId ||
       bundle.rawEdges.some((e) => e.id === selectedEdgeId);
-    const isHovered = src.id === hoveredNodeId || tgt.id === hoveredNodeId;
+    const isHovered = isDirectlyConnected && (src.id === hoveredNodeId || tgt.id === hoveredNodeId);
 
-    let strokeColor = 'rgba(56, 189, 248, 0.25)';
+    // Dim unrelated edges when a node is focused
+    let opacity = activeFocusId ? (isDirectlyConnected ? 1.0 : 0.08) : 0.55;
+    let strokeColor = `rgba(56, 189, 248, ${opacity * 0.5})`;
     let lineWidth = 1.5;
 
     if (bundle.isPoison) {
-      strokeColor = isSelected ? '#ff0055' : 'rgba(255, 0, 85, 0.75)';
+      strokeColor = isSelected ? '#ff0055' : `rgba(255, 0, 85, ${opacity})`;
       lineWidth = 2.5;
     } else if (bundle.isDust) {
-      strokeColor = isSelected ? '#ffdd00' : 'rgba(255, 221, 0, 0.55)';
+      strokeColor = isSelected ? '#ffdd00' : `rgba(255, 221, 0, ${opacity * 0.8})`;
       lineWidth = 2;
+    } else if (isIncomingToFocus) {
+      // Incoming money to focused wallet: Green flow
+      strokeColor = '#00ff66';
+      lineWidth = 2.8;
+    } else if (isOutgoingFromFocus) {
+      // Outgoing money from focused wallet: Cyan/Rose flow
+      strokeColor = '#00f3ff';
+      lineWidth = 2.8;
     } else if (isSelected || isHovered) {
       strokeColor = '#00f3ff';
       lineWidth = 2.5;
@@ -131,40 +173,84 @@ export function drawCyberpunkGraph(
 
     drawArrow(ctx, src.x, src.y, tgt.x, tgt.y, tgt.radius + 6, strokeColor);
 
-    if (showParticles) {
+    if (showParticles && isDirectlyConnected) {
       drawBundledParticles(ctx, src, tgt, bundle, particleOffset);
     }
 
-    if (bundle.count > 1 || isHovered || isSelected) {
-      const midX = (src.x + tgt.x) / 2;
-      const midY = (src.y + tgt.y) / 2;
-      drawEdgeBadge(ctx, midX, midY, bundle, isSelected || isHovered);
+    // ONLY DRAW BADGE IF:
+    // 1. This edge is connected to the active hovered/selected node, OR
+    // 2. This edge is explicitly hovered/selected
+    // (This eliminates the confusing clutter of 50+ floating numbers all over the graph!)
+    if (activeFocusId ? isDirectlyConnected : isSelected) {
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist >= src.radius + tgt.radius + 35) {
+        const midX = (src.x + tgt.x) / 2;
+        const midY = (src.y + tgt.y) / 2;
+        const perpX = -dy / dist;
+        const perpY = dx / dist;
+        const offsetDist = 12;
+
+        let badgeText = `${sompisToKas(bundle.totalAmount).toLocaleString(undefined, { maximumFractionDigits: 1 })} KAS`;
+        if (isIncomingToFocus) {
+          badgeText = `📥 Inflow: +${badgeText}`;
+        } else if (isOutgoingFromFocus) {
+          badgeText = `📤 Outflow: -${badgeText}`;
+        } else if (bundle.count > 1) {
+          badgeText = `${bundle.count} txs (${badgeText})`;
+        }
+
+        badgesToDraw.push({
+          x: midX + perpX * offsetDist,
+          y: midY + perpY * offsetDist,
+          text: badgeText,
+          color: isIncomingToFocus ? '#00ff66' : isOutgoingFromFocus ? '#00f3ff' : '#94a3b8',
+          isIncoming: isIncomingToFocus,
+        });
+      }
     }
   }
 
-  // 4. Draw Nodes
+  // 5. Draw Nodes (Dim unrelated nodes when a node is focused)
   for (const node of nodes) {
     if (node.hidden) continue;
     if (filterDustOnly && !node.flags.isDustSender) continue;
     if (filterPoisonOnly && !node.flags.isPoisoningSuspect) continue;
 
+    const isConnected = !activeFocusId || connectedNodeIds.has(node.id);
     const isSearchMatched =
       searchFilter.length > 0 &&
       Boolean(
         node.id.toLowerCase().includes(searchFilter.toLowerCase()) ||
-        node.label.toLowerCase().includes(searchFilter.toLowerCase()) ||
-        (node.userLabel && node.userLabel.toLowerCase().includes(searchFilter.toLowerCase()))
+          node.label.toLowerCase().includes(searchFilter.toLowerCase()) ||
+          (node.userLabel && node.userLabel.toLowerCase().includes(searchFilter.toLowerCase()))
       );
 
     const isSelected = node.id === selectedNodeId;
     const isHovered = node.id === hoveredNodeId;
 
-    drawNode(ctx, node, isSelected, isHovered, isSearchMatched, particleOffset);
+    drawNode(
+      ctx,
+      node,
+      isSelected,
+      isHovered,
+      isSearchMatched,
+      particleOffset,
+      viewport.scale,
+      isConnected
+    );
+  }
+
+  // 6. Draw Edge Badges on Top Layer (Clean, clear and only for focused relations!)
+  for (const badge of badgesToDraw) {
+    drawCleanBadge(ctx, badge.x, badge.y, badge.text, badge.color);
   }
 
   ctx.restore();
 
-  // 5. Draw Cyberpunk Radar Minimap (Screen-space overlay)
+  // 7. Draw Cyberpunk Radar Minimap
   if (showMinimap && nodes.length > 0) {
     drawMinimap(ctx, width, height, nodes, viewport);
   }
@@ -207,6 +293,41 @@ function drawGrid(
       ctx.fillRect(x - 2, y - 2, 4, 4);
     }
   }
+}
+
+function drawScanningSweep(
+  ctx: CanvasRenderingContext2D,
+  nodes: GraphNode[],
+  animOffset: number
+): void {
+  const rootNode = nodes.find((n) => n.flags.isRoot) || nodes[0] || { x: 0, y: 0 };
+  const angle = animOffset * Math.PI * 2;
+  const radius = 650;
+
+  const pulseR = (animOffset * radius) % radius;
+  ctx.beginPath();
+  ctx.arc(rootNode.x, rootNode.y, pulseR, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(0, 243, 255, ${(1 - pulseR / radius) * 0.4})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const coneGradient = ctx.createRadialGradient(
+    rootNode.x,
+    rootNode.y,
+    10,
+    rootNode.x,
+    rootNode.y,
+    radius
+  );
+  coneGradient.addColorStop(0, 'rgba(0, 243, 255, 0.25)');
+  coneGradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
+
+  ctx.beginPath();
+  ctx.moveTo(rootNode.x, rootNode.y);
+  ctx.arc(rootNode.x, rootNode.y, radius, angle - Math.PI / 4, angle, false);
+  ctx.closePath();
+  ctx.fillStyle = coneGradient;
+  ctx.fill();
 }
 
 function drawArrow(
@@ -281,31 +402,27 @@ function drawBundledParticles(
   }
 }
 
-function drawEdgeBadge(
+function drawCleanBadge(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  bundle: BundledEdge,
-  highlight: boolean
+  text: string,
+  color: string
 ): void {
-  const text =
-    bundle.count > 1
-      ? `${bundle.count} txs (${sompisToKas(bundle.totalAmount).toFixed(1)} KAS)`
-      : `${sompisToKas(bundle.totalAmount).toFixed(1)} KAS`;
-  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.font = 'bold 10px "JetBrains Mono", monospace';
   const metrics = ctx.measureText(text);
-  const padding = 4;
+  const padding = 6;
 
-  ctx.fillStyle = 'rgba(7, 9, 14, 0.92)';
-  ctx.strokeStyle = highlight ? '#00f3ff' : 'rgba(75, 85, 99, 0.5)';
-  ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(7, 9, 14, 0.96)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
 
   ctx.beginPath();
-  ctx.roundRect(x - metrics.width / 2 - padding, y - 7, metrics.width + padding * 2, 14, 3);
+  ctx.roundRect(x - metrics.width / 2 - padding, y - 8, metrics.width + padding * 2, 16, 4);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = highlight ? '#00f3ff' : '#94a3b8';
+  ctx.fillStyle = color;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y);
@@ -317,7 +434,9 @@ function drawNode(
   isSelected: boolean,
   isHovered: boolean,
   isSearchMatched: boolean,
-  animOffset: number
+  animOffset: number,
+  scale: number,
+  isConnected: boolean
 ): void {
   const { x, y, radius, flags, color } = node;
 
@@ -328,7 +447,10 @@ function drawNode(
   if (node.flags.isExchange) baseColor = '#38bdf8';
   if (node.flags.isMiningPool) baseColor = '#a855f7';
 
-  // Pulse ring
+  // Apply subtle dimming if another node is focused and this one is unrelated
+  const alpha = isConnected ? 1.0 : 0.2;
+  ctx.globalAlpha = alpha;
+
   if (isSelected || isHovered || flags.isPoisoningSuspect || isSearchMatched) {
     const pulseRadius = radius + 8 + Math.sin(animOffset * Math.PI * 2) * 2;
     ctx.beginPath();
@@ -340,7 +462,6 @@ function drawNode(
     ctx.setLineDash([]);
   }
 
-  // Outer glow
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.shadowColor = baseColor;
@@ -349,19 +470,20 @@ function drawNode(
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Node boundary
   ctx.strokeStyle = baseColor;
   ctx.lineWidth = isSelected ? 3 : 2;
   ctx.stroke();
 
-  // Center core
   ctx.beginPath();
   ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
   ctx.fillStyle = baseColor;
   ctx.fill();
 
-  // Label banner
-  drawNodeLabel(ctx, node, x, y + radius + 15, isSelected);
+  if (scale >= 0.45 || isSelected || isHovered || flags.isPoisoningSuspect || isSearchMatched) {
+    drawNodeLabel(ctx, node, x, y + radius + 15, isSelected, scale);
+  }
+
+  ctx.globalAlpha = 1.0;
 }
 
 function drawNodeLabel(
@@ -369,7 +491,8 @@ function drawNodeLabel(
   node: GraphNode,
   x: number,
   y: number,
-  isSelected: boolean
+  isSelected: boolean,
+  scale: number
 ): void {
   const label = node.userLabel ? `${node.userLabel} (${node.label})` : node.label;
   ctx.font = isSelected ? 'bold 11px "JetBrains Mono", monospace' : '10px "JetBrains Mono", monospace';
@@ -391,7 +514,7 @@ function drawNodeLabel(
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x, y);
 
-  if (node.balance !== undefined && node.balance > 0) {
+  if ((scale >= 0.7 || isSelected) && node.balance !== undefined && node.balance > 0) {
     const balText = `${sompisToKas(node.balance).toFixed(2)} KAS`;
     ctx.font = '8px "JetBrains Mono", monospace';
     ctx.fillStyle = '#94a3b8';
@@ -411,7 +534,6 @@ function drawMinimap(
   const mmX = canvasWidth - mmW - 16;
   const mmY = canvasHeight - mmH - 16;
 
-  // Minimap background
   ctx.fillStyle = 'rgba(13, 17, 26, 0.85)';
   ctx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
   ctx.lineWidth = 1;
@@ -420,7 +542,6 @@ function drawMinimap(
   ctx.fill();
   ctx.stroke();
 
-  // Radar grid crosshairs
   ctx.beginPath();
   ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
   ctx.moveTo(mmX + mmW / 2, mmY);
@@ -429,7 +550,6 @@ function drawMinimap(
   ctx.lineTo(mmX + mmW, mmY + mmH / 2);
   ctx.stroke();
 
-  // Bounding box of all nodes
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -450,7 +570,6 @@ function drawMinimap(
 
   const mmScale = Math.min((mmW - 16) / rangeX, (mmH - 16) / rangeY);
 
-  // Draw node dots in minimap
   for (const n of nodes) {
     if (n.hidden) continue;
     const nx = mmX + mmW / 2 + (n.x - midX) * mmScale;
@@ -462,7 +581,6 @@ function drawMinimap(
     ctx.fill();
   }
 
-  // Draw camera viewport rectangle in minimap
   const viewWorldLeft = -viewport.x / viewport.scale;
   const viewWorldTop = -viewport.y / viewport.scale;
   const viewWorldRight = (canvasWidth - viewport.x) / viewport.scale;
@@ -482,7 +600,6 @@ function drawMinimap(
     Math.min(mmH, camH)
   );
 
-  // Minimap Label
   ctx.font = '8px "JetBrains Mono", monospace';
   ctx.fillStyle = '#64748b';
   ctx.fillText('RADAR', mmX + 6, mmY + 10);

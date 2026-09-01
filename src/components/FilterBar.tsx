@@ -17,6 +17,8 @@ import {
   Palette,
   ChevronDown,
   ChevronUp,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 export const FilterBar: React.FC = () => {
@@ -41,6 +43,7 @@ export const FilterBar: React.FC = () => {
     addLog,
   } = useGraphStore();
 
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
 
   const handleRadialLayout = () => {
@@ -49,15 +52,85 @@ export const FilterBar: React.FC = () => {
     addLog('Arranged nodes in radial hop layout.', 'info');
   };
 
+  const poisonAlerts = alerts.filter((a) => a.type === 'poison').length;
+  const dustAlerts = alerts.filter((a) => a.type === 'dust').length;
+
+  if (isCollapsed) {
+    return (
+      <div className="absolute top-4 left-4 z-10 flex flex-col space-y-1.5 bg-[#0d111a]/90 backdrop-blur border border-[#1b2333] rounded-lg p-1.5 shadow-xl text-xs font-mono select-none">
+        <button
+          onClick={() => setIsCollapsed(false)}
+          title="Expand Graph Controls"
+          className="p-1.5 rounded hover:bg-cyan-950/60 text-cyan-400 flex items-center justify-center transition"
+        >
+          <PanelLeftOpen className="w-4 h-4" />
+        </button>
+
+        <div className="w-full h-[1px] bg-gray-800 my-0.5" />
+
+        <button
+          onClick={() => setFilterPoisonOnly(!filterPoisonOnly)}
+          title="Filter Address Poisoning Attacks"
+          className={`p-1.5 rounded flex items-center justify-center relative transition ${
+            filterPoisonOnly
+              ? 'bg-rose-950/80 text-rose-300 border border-rose-500'
+              : 'hover:bg-gray-800 text-gray-400'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4 text-rose-400" />
+          {poisonAlerts > 0 && (
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-600 text-[8px] text-white font-bold flex items-center justify-center">
+              {poisonAlerts}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setFilterDustOnly(!filterDustOnly)}
+          title="Filter Dust Transfers"
+          className={`p-1.5 rounded flex items-center justify-center relative transition ${
+            filterDustOnly
+              ? 'bg-amber-950/80 text-amber-300 border border-amber-500'
+              : 'hover:bg-gray-800 text-gray-400'
+          }`}
+        >
+          <Coins className="w-4 h-4 text-amber-400" />
+          {dustAlerts > 0 && (
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-600 text-[8px] text-black font-bold flex items-center justify-center">
+              {dustAlerts}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={handleRadialLayout}
+          title="Radial Hop Layout"
+          className="p-1.5 rounded hover:bg-gray-800 text-cyan-400 flex items-center justify-center transition"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="absolute top-4 left-4 z-10 w-64 bg-[#0d111a]/90 backdrop-blur border border-[#1b2333] rounded-lg p-3 space-y-3.5 shadow-xl text-xs font-mono select-none max-h-[calc(100vh-5rem)] overflow-y-auto">
-      {/* Header */}
+    <div className="absolute top-4 left-4 z-10 w-64 bg-[#0d111a]/95 backdrop-blur border border-[#1b2333] rounded-lg p-3 space-y-3 shadow-xl text-xs font-mono select-none max-h-[calc(100vh-5rem)] overflow-y-auto">
+      {/* Header with Collapse Button */}
       <div className="flex items-center justify-between border-b border-[#1b2333] pb-2">
         <div className="flex items-center space-x-1.5 text-cyan-400 font-bold">
           <Filter className="w-3.5 h-3.5" />
           <span>GRAPH CONTROLS</span>
         </div>
-        <span className="text-[10px] text-gray-500">{nodes.length} N / {edges.length} E</span>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-[10px] text-gray-500">{nodes.length} N / {edges.length} E</span>
+          <button
+            onClick={() => setIsCollapsed(true)}
+            title="Minimize Panel"
+            className="p-1 text-gray-500 hover:text-gray-300 rounded hover:bg-gray-800"
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* In-Graph Search */}
@@ -89,7 +162,7 @@ export const FilterBar: React.FC = () => {
             <span>Poisoning Only</span>
           </span>
           <span className="text-[10px] font-bold">
-            {alerts.filter((a) => a.type === 'poison').length}
+            {poisonAlerts}
           </span>
         </button>
 
@@ -106,7 +179,7 @@ export const FilterBar: React.FC = () => {
             <span>Dust Only</span>
           </span>
           <span className="text-[10px] font-bold">
-            {alerts.filter((a) => a.type === 'dust').length}
+            {dustAlerts}
           </span>
         </button>
       </div>
@@ -148,27 +221,27 @@ export const FilterBar: React.FC = () => {
           <div className="space-y-1.5 p-2 bg-[#07090e] border border-gray-800 rounded text-[10px] text-gray-400">
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#00f3ff] flex-shrink-0" />
-              <span>Cyan: Root Target / Dev Fund</span>
+              <span>Cyan: Root / Dev Fund</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#ff0055] flex-shrink-0" />
-              <span className="text-rose-300">Red: Poisoning Mimic Suspect</span>
+              <span className="text-rose-300">Red: Poisoning Suspect</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#ffdd00] flex-shrink-0" />
-              <span className="text-amber-300">Yellow: Dust Sender / Custom Tag</span>
+              <span className="text-amber-300">Yellow: Dust / Custom Tag</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#38bdf8] flex-shrink-0" />
-              <span>Sky Blue: Exchange Hot Wallet</span>
+              <span>Sky Blue: Exchange</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#a855f7] flex-shrink-0" />
-              <span>Purple: Mining Pool / Inflow</span>
+              <span>Purple: Mining Pool</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] flex-shrink-0" />
-              <span>Green: Outflow / Recipient</span>
+              <span>Green: Recipient</span>
             </div>
           </div>
         )}

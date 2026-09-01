@@ -5,7 +5,8 @@ import { runForceSimulationStep, calculateZoomToFit } from '../engine/layout';
 import { GraphNode } from '../api/types';
 import { ContextMenu } from './ContextMenu';
 import { LabelModal } from './LabelModal';
-import { Plus, Minus, Maximize2, RotateCcw, Eye, Radar, Play } from 'lucide-react';
+import { Plus, Minus, Maximize2, RotateCcw, Eye, Radar, Play, Keyboard } from 'lucide-react';
+import { ShortcutsModal } from './InfoModals';
 
 const PRESETS = [
   { label: 'Top Whale Wallet (#1 Rank)', address: 'kaspa:qpz2vgvlxhmyhmt22h538pjzmvvd52nuut80y5zulgpvyerlskvvwm7n4uk5a' },
@@ -48,6 +49,8 @@ export const CanvasGraph: React.FC = () => {
   // Context Menu & Label Modal state
   const [contextMenu, setContextMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [labelModalNode, setLabelModalNode] = useState<GraphNode | null>(null);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   // Interaction tracking refs
   const isDraggingCanvas = useRef(false);
@@ -57,21 +60,26 @@ export const CanvasGraph: React.FC = () => {
   const particleOffset = useRef(0);
   const isPhysicsSleeping = useRef(false);
 
-  // Auto Zoom-to-Fit on initial node load
+  // Stable Zoom-to-Fit handler
   const handleZoomToFit = useCallback(() => {
-    if (!containerRef.current || nodes.length === 0) return;
+    const currentNodes = useGraphStore.getState().nodes;
+    if (!containerRef.current || currentNodes.length === 0) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const fit = calculateZoomToFit(nodes, rect.width, rect.height, 140);
+    const fit = calculateZoomToFit(currentNodes, rect.width, rect.height, 140);
     if (fit) {
       setViewport(fit);
     }
-  }, [nodes]);
+  }, []);
 
+  const prevNodeCount = useRef(0);
+
+  // Auto Zoom-to-Fit ONLY when a fresh scan finishes (0 -> N nodes)
   useEffect(() => {
-    if (nodes.length > 0) {
+    if (prevNodeCount.current === 0 && nodes.length > 0) {
       handleZoomToFit();
       isPhysicsSleeping.current = false;
     }
+    prevNodeCount.current = nodes.length;
   }, [nodes.length, handleZoomToFit]);
 
   // Coordinate transforms: Screen to World
@@ -141,6 +149,7 @@ export const CanvasGraph: React.FC = () => {
         searchFilter,
         particleOffset: particleOffset.current,
         showMinimap: nodes.length > 0,
+        isScanning,
       });
 
       animFrameId.current = requestAnimationFrame(loop);
@@ -193,12 +202,40 @@ export const CanvasGraph: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Close context menu on global click
+  // Global Keyboard Shortcuts & Close context menu on click
   useEffect(() => {
     const closeMenu = () => setContextMenu(null);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcuts if user is typing in an input
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (e.key === 'f' || e.key === 'F') {
+        handleZoomToFit();
+      } else if (e.key === '+' || e.key === '=') {
+        handleZoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        handleZoomOut();
+      } else if (e.key === 'Escape') {
+        selectNode(null);
+        selectEdge(null);
+        setContextMenu(null);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+        useGraphStore.getState().hideNode(selectedNodeId);
+        selectNode(null);
+      }
+    };
+
     window.addEventListener('click', closeMenu);
-    return () => window.removeEventListener('click', closeMenu);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleZoomToFit, selectedNodeId, selectNode, selectEdge]);
 
   // Mouse Handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -242,6 +279,11 @@ export const CanvasGraph: React.FC = () => {
     } else {
       const hitNode = getNodeAt(world.x, world.y);
       setHoveredNodeId(hitNode ? hitNode.id : null);
+      if (hitNode) {
+        setMousePos({ x: clientX + 14, y: clientY + 14 });
+      } else {
+        setMousePos(null);
+      }
     }
   };
 
@@ -367,9 +409,32 @@ export const CanvasGraph: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Canvas Controls */}
+      {/* Interactive Hover Tooltip */}
+      {hoveredNodeId && mousePos && (
+        <div
+          style={{ top: mousePos.y, left: mousePos.x }}
+          className="absolute z-20 pointer-events-none bg-[#07090e]/95 backdrop-blur border border-cyan-500/50 rounded px-2.5 py-1.5 shadow-[0_0_15px_rgba(0,243,255,0.25)] text-[10px] font-mono space-y-0.5"
+        >
+          <div className="text-cyan-300 font-bold flex items-center space-x-1">
+            <span>🖱️ Left-Click: Inspect Wallet</span>
+          </div>
+          <div className="text-gray-400">
+            <span>🖱️ Right-Click: Action Menu (Pin, Tag, Trace)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Canvas Controls & Hotkey Pill */}
       {nodes.length > 0 && (
-        <div className="absolute bottom-4 left-4 z-10 flex items-center space-x-1.5 bg-[#0d111a]/90 backdrop-blur border border-[#1b2333] rounded-lg p-1 shadow-lg text-xs font-mono select-none">
+        <div className="absolute bottom-4 left-4 z-10 flex items-center space-x-1.5 bg-[#0d111a]/95 backdrop-blur border border-[#1b2333] rounded-lg p-1 shadow-xl text-xs font-mono select-none">
+          <button
+            onClick={() => setIsShortcutsOpen(true)}
+            title="View All Keyboard Shortcuts"
+            className="px-2 h-7 rounded hover:bg-cyan-950/60 hover:text-cyan-300 text-gray-400 flex items-center space-x-1 text-[11px] transition border-r border-gray-800 pr-2"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-[10px] text-cyan-300 font-bold">HOTKEYS</span>
+          </button>
           <button
             onClick={handleZoomIn}
             title="Zoom In (+)"
@@ -433,6 +498,12 @@ export const CanvasGraph: React.FC = () => {
         node={labelModalNode}
         isOpen={labelModalNode !== null}
         onClose={() => setLabelModalNode(null)}
+      />
+
+      {/* Shortcuts Modal */}
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
     </div>
   );
